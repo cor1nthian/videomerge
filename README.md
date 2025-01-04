@@ -6,7 +6,7 @@ Script uses fffmpeg / ffprobe exe tools, read more on this in script comments
 Tested with Windows 10
 
 Can be called with arguments:
-| Ppsition | Suggested type | Description |
+| Position | Suggested type | Description |
 | --- | --- | --- |
 | 1 | String | Path to folder containing video files and image
 | 2 | Bool | If true, creates exact chapter marks (adds half a second to every chapter start mark, which is enough even in case of not exact K-Lite player rewind)
