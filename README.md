@@ -12,6 +12,8 @@ Can be called with arguments:
 | 2 | Bool | If true, creates exact chapter marks (adds half a second to every chapter start mark, which is enough even in case of not exact K-Lite player rewind)
 | 3 | Bool | If true, creates twxt file containg chapter info
 
+:exclamation: Variables set in the script have priority over script arguments
+
 Script return codes:
 | Code | Description |
 | --- | --- |
