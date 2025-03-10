@@ -11,7 +11,7 @@ import shutil, subprocess, os, sys
 # All tools are suggested to be placed to script folder
 
 
-contentFolderPath = 'C:\\Users\\admin\\Downloads\\tronlegacy\\mp4'
+contentFolderPath = ''
 outputFullFilename = contentFolderPath + os.path.sep + 'out.mp4'
 outputFullFilenamemd = contentFolderPath + os.path.sep + 'outmd.mp4'
 ffmpegfname = 'ffmpeg.exe'
