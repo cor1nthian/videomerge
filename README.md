@@ -1,7 +1,7 @@
 # videomerge
-Video merge script creating a video file from a bunch if video files and (optionally) timestamp text data list.
+Video merge script creating a video file from a bunch if video files and (optionally) chapters and timestamp text data list.
 
-Script uses fffmpeg / ffprobe exe tools, read more on this in script comments
+Script uses fffmpeg / ffprobe binary tools, read more on this in script comments
 
 Tested with Windows 10
 
