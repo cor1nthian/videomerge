@@ -1,4 +1,5 @@
-import subprocess, os, sys
+import shutil, subprocess, os, sys
+
 
 # Build ffmpeg and ffprobe from source
 # or download at https://www.gyan.dev/ffmpeg/builds/
@@ -10,7 +11,7 @@ import subprocess, os, sys
 # All tools are suggested to be placed to script folder
 
 
-contentFolderPath = 'C:\\users\\admin\\Downloads\\Perimeter OST\\mp3\\mp4'
+contentFolderPath = 'C:\\Users\\admin\\Downloads\\tronlegacy\\mp4'
 outputFullFilename = contentFolderPath + os.path.sep + 'out.mp4'
 outputFullFilenamemd = contentFolderPath + os.path.sep + 'outmd.mp4'
 ffmpegfname = 'ffmpeg.exe'
@@ -18,13 +19,32 @@ ffprobefname = 'ffprobe.exe'
 vidlistfname = 'vidlist.txt'
 metadatafile = 'metadata.txt'
 txtchapdesc = 'chapdesc.txt'
-createTextChapDesc = False
-createTextChapters = True
+escChar = '\\'
+createTextChapDesc = True
+createTextChapters = False
 exactChapters = True
+addNums2ChapDesc = False
+createFadeIn = True
+createFadeOut = True
 totalduration = 0
 systemExitCode = 0
 
+maxdfo = 10 # max fade out duration
+maxdfi = 10 # max fade in duration
+
 metainfokeyspl = '/'
+
+escapeChrs = [ '\\', ' ', '\'' ]
+
+allowedSizes = [ '7680x4320',
+                 '3840x2160',
+                 '2560x1440',
+                 '1920x1080',
+                 '1280x720',
+                 '854x480',
+                 '640x360',
+                 '426x240' ]
+
 metainfo = { 'metaauthors_perimeter': 'K-D Lab [Victor Krasnokutsky]',
              'metaadd_perimeter': { 'empire primary': 'Bell Strike',
                                     'empire psychosphere': 'Phobia',
@@ -33,7 +53,19 @@ metainfo = { 'metaauthors_perimeter': 'K-D Lab [Victor Krasnokutsky]',
                                     'exodus psychosphere': 'Delusion',
                                     'harkbackhood primary': 'DNA',
                                     'harkbackhood covered':'Scourge',
-                                    'alpha expedition': 'Destination' } }
+                                    'alpha expedition': 'Destination' },
+             'metaauthors_tekken 5': '',
+             'metaadd_tekken 5': '',
+             'metaauthors_fight club': 'The Dust Brothers',
+             'metaadd_fight club': '',
+             'metaauthors_doom 2016': 'Mick Gordon',
+             'metaadd_doom 2016': '',
+             'metaauthors_doom eternal': 'Mick Gordon',
+             'metaadd_doom eternal': '',
+             'metaauthors_warcraft 3': '',
+             'metaadd_warcraft 3': '',
+             'metaauthors_wh': 'Jeremy Soule',
+             'metaadd_wh': '' }
 
 
 # A python class definition for printing formatted text on terminal.
@@ -132,8 +164,15 @@ def get_script_path():
     return os.path.dirname(os.path.realpath(sys.argv[0]))
 
 
+def escapeChars(sequence: str):
+    out = ''
+    for ch in sequence:
+        out += escChar + ch
+    return out
+
+
 def getMetaKey(keyname: str):
-    global  metainfokeyspl
+    global metainfokeyspl
     try:
         if metainfokeyspl in keyname:
             keynamespl = keyname.split(metainfokeyspl)
@@ -144,10 +183,100 @@ def getMetaKey(keyname: str):
         return ''
 
 
-def formTitle(argstr:str):
+
+def addFadeIn(fname:str, start: int = 0, duration: int = 5):
+    global  ffmpegfname
+    global outputFullFilename
+    global  maxdfo
+    global  maxdfi
+    colorprint = TextFormatter()
+    colorprint.cfg('y', 'k', 'b')
+    if not os.path.exists(fname):
+        return None
+    dura = getmediaduration(fname)
+    if dura is None:
+        return None
+    duraint = int(float(dura))
+    if maxdfo < duration or 0 >= duration:
+        return None
+    if 0 > start or duraint <= start:
+        return None
+    fadestr = 'fade=t=in:st=' + str(start) + ':d=' + str(duration)
+    outputFullFilenamespl = outputFullFilename.split('\\')
+    outputFullFilenamejoined = os.path.sep.join(outputFullFilenamespl[:-1])
+    outputFullFilenameed = outputFullFilenamespl[-1].split('.')
+    if len(outputFullFilenameed) > 2:
+        outputFullFilenamemi = '.'.join(outputFullFilenameed[:-1]) + 'mi.' + outputFullFilenameed[-1]
+    elif len(outputFullFilenameed) == 2:
+        outputFullFilenamemi = outputFullFilenameed[0] + 'mi.' + outputFullFilenameed[1]
+    else:
+        return None
+    outputFullFilenamemi = outputFullFilenamejoined + os.path.sep + outputFullFilenamemi
+    arglist = [ ffmpegfname,
+                '-y',
+                '-i',
+                fname,
+                '-vf',
+                fadestr,
+                '-c:a',
+                'copy',
+                outputFullFilenamemi ]
+    subprocess.run(arglist)
+    return outputFullFilenamemi
+
+
+def addFadeOut(fname:str, start: int = -999999, duration: int = 5):
+    global ffmpegfname
+    global outputFullFilename
+    global maxdfo
+    global maxdfi
+    colorprint = TextFormatter()
+    colorprint.cfg('y', 'k', 'b')
+    if not os.path.exists(fname):
+        return None
+    dura = getmediaduration(fname)
+    if dura is None:
+        return None
+    duraint = int(float(dura))
+    if maxdfi < duration or 0 >= duration:
+        return None
+    if -duraint <= start:
+        return None
+    if start < 0:
+        if -999999 == start:
+            start = duraint - duration
+        else:
+            start = duraint + start
+    fadestr = 'fade=t=out:st=' + str(start) + ':d=' + str(duration)
+    outputFullFilenamespl = outputFullFilename.split('\\')
+    outputFullFilenamejoined = os.path.sep.join(outputFullFilenamespl[:-1])
+    outputFullFilenameed = outputFullFilenamespl[-1].split('.')
+    if len(outputFullFilenameed) > 2:
+        outputFullFilenamemo = '.'.join(outputFullFilenameed[:-1]) + 'mo.' + outputFullFilenameed[-1]
+    elif len(outputFullFilenameed) == 2:
+        outputFullFilenamemo = outputFullFilenameed[0] + 'mo.' + outputFullFilenameed[1]
+    else:
+        return None
+    outputFullFilenamemo = outputFullFilenamejoined + os.path.sep + outputFullFilenamemo
+    arglist = [ffmpegfname,
+               '-y',
+               '-i',
+               fname,
+               '-vf',
+               fadestr,
+               '-c:a',
+               'copy',
+               outputFullFilenamemo ]
+    subprocess.run(arglist)
+    return outputFullFilenamemo
+
+
+def formTitle(argstr:str, removeNums: bool = True):
     global metainfo
     colorprint = TextFormatter()
     colorprint.cfg('y', 'k', 'b')
+    if 'EpicHyrbrid' in argstr:
+        print('!!!')
     if len(argstr) == 0 or argstr is None:
         return ''
     argstrlow = argstr.strip().lower()
@@ -155,28 +284,45 @@ def formTitle(argstr:str):
     for key in metainfo:
         if not '_' in key:
             continue
-        keylowspl = key.lower().split('_')[1]
-        if keylowspl in key.lower():
+        keylowspl = key.lower().split('_')[-1]
+        if keylowspl in argstrlow:
             keylist.append(key)
     title = ''
-    soundname = ''
+    # title = argstr
+    soundname = argstr.split('\\')[-1]
+    if removeNums and '. ' in soundname:
+        soundname = ''.join(soundname.split('. ')[1:]).strip()
     for key in keylist:
         if 'metaauthors' in key:
-            title += metainfo[key]
+            if len(metainfo[key]) > 0 and not ' - ' in argstr:
+                title += metainfo[key]
         if 'metaadd' in key:
-            if len(metainfo[key]) != 0 and type(metainfo[key]) is dict:
+            if len(metainfo[key]) > 0 and type(metainfo[key]) is dict:
                 for skey in metainfo[key]:
                     skeylow = skey.lower()
                     if skeylow in argstrlow:
+                        argstrpr = argstr.split('c')[0][::-1].split('\\')[0][::-1]
                         soundname = (metainfo[key][skey]) + ' [' + argstr + ']'
-                        title += ' - ' + soundname
+                        if len(title) > 0:
+                            title += ' - ' + soundname
+                        else:
+                            title = soundname
                         return title
-                    else:
-                        soundname = argstr
-            else:
-                soundname = argstr
-    title += ' - ' + soundname
-    return  title
+                    # else:
+                        # soundname = argstr
+            # else:
+                # soundname = argstr
+    if len(title) > 0:
+        if '.' in soundname:
+            title += ' - ' + soundname.replace(soundname.split('.')[-1], '')[:-1]
+        else:
+            title += ' - ' + soundname
+    else:
+        if len(soundname) > 0:
+            # snext = soundname.split('.')[-1]
+            if '.' in soundname:
+                title = soundname.replace(soundname.split('.')[-1], '')[:-1]
+    return title
 
 
 def list2textfile(filename: str, datalist: list):
@@ -188,8 +334,10 @@ def list2textfile(filename: str, datalist: list):
     with open(filename, 'w', encoding='utf-8') as f:
         f.write('ffconcat version 1.0\n\n')
         for line in datalist:
-            fline = 'file ' + line.replace('\\', '\\\\').replace(' ', '\\ ') + '\n'
-            f.write(fline)
+            # fline = 'file "' + line.replace('\\', '\\\\').replace(' ', '\\ ') + '"\n'
+            # flieln = 'file ' + escapeChars(line)
+            flieln = 'file ' + line.replace('\\', '\\\\').replace('\'', '\\\'').replace(' ', '\\ ') + '\n'
+            f.write(flieln)
         f.close()
     return True
 
@@ -203,7 +351,7 @@ def getrealduration(duration: int):
     mins = 0
     secs = 0
     dura = 0
-    if duration < 10:
+    if duration <= 10:
         return '00:00:00'
     if duration > 1000:
         dura = duration / 1000
@@ -211,9 +359,9 @@ def getrealduration(duration: int):
         dura = duration
     secs = int(dura % 60)
     mins = int((dura / 60) % 60)
-    hrs = int((mins / 60) % 60)
+    hrs = int(dura / 3600)
     if hrs > 0:
-        days = int((hrs / 24) % 24)
+        days = int(dura / 86400)
     if days > 0:
         realdura = ('{:02}'.format(days) + '{:02}'.format(hrs) + ':' + '{:02}'.format(mins) + ':' +
                     '{:02}'.format(secs))
@@ -230,7 +378,7 @@ def getmediaduration(mediafilename: str):
         colorprint.out('PATH TO MEDIA FILE IS EMPTY')
         return None
     if not os.path.exists(mediafilename):
-        colorprint.out('PATH TO MP3 FILE DOES NOT EXIST')
+        colorprint.out('PATH TO MEDIA FILE DOES NOT EXIST')
         return None
     subarglist = [ ffprobefname, '-show_entries', 'format=duration', '-i', mediafilename ]
     popen  = subprocess.Popen(subarglist, stdout = subprocess.PIPE)
@@ -263,9 +411,11 @@ def listFilesInFolderByExt(folderpath: str, fileext: str = '.mp4',
     return filenames
 
 
+######### SCRIPT #########
 if __name__ == "__main__":
     colorprint = TextFormatter()
     colorprint.cfg('r', 'k', 'b')
+    # print(formTitle('C:\\Users\\admin\\Downloads\\ppsc\\mp4\\05. Spanish Fly (Flamenco Dub Pt. 1).mp4'))
     if len(contentFolderPath) == 0 or contentFolderPath is None or not type(contentFolderPath) is str:
         if len(sys.argv) > 1:
             if os.path.exists(sys.argv[1]):
@@ -275,7 +425,7 @@ if __name__ == "__main__":
                 systemExitCode = 1
                 sys.exit(systemExitCode)
         else:
-            colorprint.out('CONTENT FOLDER NOT FOUND')
+            colorprint.out('CONTENT FOLDER PATH NOT FOUND')
             systemExitCode = 2
             sys.exit(systemExitCode)
     else:
@@ -284,18 +434,18 @@ if __name__ == "__main__":
             systemExitCode = 1
             sys.exit(systemExitCode)
     if exactChapters is None or not type(exactChapters) is bool:
-        if len(sys.argv) >= 3:
-            createtextchapdesc = bool(sys.argv[3])
+        if len(sys.argv) > 2:
+            createTextChapters = bool(sys.argv[2])
         else:
             colorprint.out('EXACT CHAPTER TIMESTAMPS MARK VARIABLE NOT SET')
-            systemExitCode = 4
+            systemExitCode = 3
             sys.exit(systemExitCode)
     if createTextChapDesc is None or not type(createTextChapDesc) is bool:
-        if len(sys.argv) >= 4:
-            createTextChapDesc = bool(sys.argv[4])
+        if len(sys.argv) > 3:
+            createTextChapDesc = bool(sys.argv[2])
         else:
             colorprint.out('TEXT CHAPTER CREATION MARK VARIABLE NOT SET')
-            systemExitCode = 5
+            systemExitCode = 4
             sys.exit(systemExitCode)
     scriptdir = get_script_path()
     ffmpegfname = scriptdir + os.path.sep + ffmpegfname
@@ -315,40 +465,70 @@ if __name__ == "__main__":
     filelist = listFilesInFolderByExt(contentFolderPath)
     if filelist is None or len(filelist) == 0 or not type(filelist) is list:
         colorprint.out('NO FILES FOUND IN SPECIFIED FOLDER')
-        systemExitCode = 3
+        systemExitCode = 5
         sys.exit(systemExitCode)
     if not list2textfile(vidlistfname, filelist):
         colorprint.out('COULD NOT CREATE VIDEO FILE LIST')
-        systemExitCode = 4
+        systemExitCode = 6
         sys.exit(systemExitCode)
-    mdcontent = []
+    mdcontent = [ ';FFMETADATA1' ]
     if createTextChapDesc:
         chapdesclines = [ 'Chapters:' ]
-    minduration = 1
+    arglist = [ ffmpegfname,
+                '-y',
+               '-safe',
+               '0',
+               '-f',
+               'concat',
+               '-i',
+               vidlistfname,
+               '-codec',
+               'copy',
+                # '-t',
+                # '00:15:45',
+               outputFullFilename ]
+    subprocess.run(arglist)
+    vidx = 0
+    minduration = 0  # 1
+    fllen = len(filelist) - 1
+    pdur = 0
+    mdur = int(float(getmediaduration(outputFullFilename))) * 1000
     for file in filelist:
         mdcontent.append('[CHAPTER]')
         mdcontent.append('TIMEBASE=1/1000')
         duration = getmediaduration(file)
         if duration is None or float(duration) == 0.0:
             colorprint.out('COULD NOT GET MEDIA DURATION')
-            systemExitCode = 6
+            systemExitCode = 7
             sys.exit(systemExitCode)
         else:
-            mdcontent.append('START=' + str(minduration))
+            duration = pdur + minduration + (int(float(duration)) * 1000)
+            mdcontent.append('START=' + str(minduration + 1))
             # duration = (minduration + int(float(duration)) * 1000) - 1
-            title = formTitle(((file[:-4][::-1]).split('\\'))[0][::-1])
-            if createTextChapDesc:
-                chapdesclines.append(getrealduration(minduration) + ' ' + title)
-            duration = minduration + int(float(duration)) * 1000
-            if exactChapters:
-                minduration = (duration + 1) + 500
+            # title = formTitle(((file[:-4][::-1]).split('\\'))[0][::-1])
+            if vidx < fllen:
+                mdcontent.append('END=' + str(duration))
             else:
-                minduration = duration + 1
-            mdcontent.append('END=' + str(duration))
+                mdcontent.append('END=' + str(mdur))
+            # title = formTitle((file[:-4].split('\\'))[-1])
+            title = formTitle(file)
             mdcontent.append('title=' + title + '\n')
-            totalduration += int(float(duration)) + 1
+            if createTextChapDesc:
+                if addNums2ChapDesc:
+                    num = file.split('\\')[-1].split('. ')[0]
+                    chapdesclines.append(getrealduration(minduration + 1) + ' [' + num + '] ' + title)
+                else:
+                    chapdesclines.append(getrealduration(minduration + 1) + ' ' + title)
+            if exactChapters:
+                minduration = duration + 300
+            else:
+                minduration = duration
+            # pdur = int(float(getmediaduration(outputFullFilename))) * 1000
+            # if vidx > 0:
+                # fmetaname = '.'.join(file.split('\\')[-1].split('.')[:-1]) + '_meta.txt'
+                # if os.path.exists(fmetaname):
+        vidx += 1
     with open(metadatafile, 'w', encoding='utf-8') as f:
-        f.write(';FFMETADATA1' + '\n')
         for line in mdcontent:
             f.write(line + '\n')
         f.close()
@@ -359,18 +539,24 @@ if __name__ == "__main__":
             for line in chapdesclines:
                 f.write(line + '\n')
             f.close()
+    if createFadeIn:
+        afires = addFadeIn(outputFullFilename)
+        if afires is None:
+            colorprint.out('COULD NOT ADD FADE IN EFFECT')
+            systemExitCode = 7
+            sys.exit(systemExitCode)
+        shutil.copy2(afires, outputFullFilename)
+        os.remove(afires)
+    if createFadeOut:
+        afores = addFadeOut(outputFullFilename)
+        if afores is None:
+            colorprint.out('COULD NOT ADD FADE OUT EFFECT')
+            systemExitCode = 8
+            sys.exit(systemExitCode)
+        shutil.copy2(afores, outputFullFilename)
+        os.remove(afores)
     arglist = [ ffmpegfname,
-                '-safe',
-                '0',
-                '-f',
-                'concat',
-                '-i',
-                vidlistfname,
-                '-codec',
-                'copy',
-                outputFullFilename ]
-    subprocess.run(arglist)
-    arglist = [ ffmpegfname,
+                '-y',
                 '-i',
                 outputFullFilename,
                 '-i',
@@ -380,6 +566,7 @@ if __name__ == "__main__":
                 '-codec',
                 'copy',
                 outputFullFilenamemd ]
+    subprocess.run(arglist)
     subprocess.run(arglist)
     os.remove(vidlistfname)
     os.remove(metadatafile)
